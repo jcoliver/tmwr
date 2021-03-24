@@ -22,7 +22,12 @@ ames_split <- initial_split(ames, prop = 0.8, strata = Sale_Price)
 ames_train <- training(ames_split)
 ames_test <- testing(ames_split)
 
-save(ames, ames_split, ames_train, ames_test, file = "ames.RData")
+# This is useful in later scripts, going to attach it to RData object
+ames_folds <- 
+  ames_train %>%
+  vfold_cv(v = 10)
+
+save(ames, ames_split, ames_train, ames_test, ames_folds, file = "ames.RData")
 
 ?save
 
