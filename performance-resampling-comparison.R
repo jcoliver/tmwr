@@ -5,6 +5,9 @@
 
 ################################################################################
 library(tidymodels)
+library(tidyposterior)
+library(rstanarm)
+library(forcats)
 
 load(file = "ames.RData")
 
@@ -175,3 +178,84 @@ corrr::correlate(rsq_estimates %>% select(-id))
 #    x1 is dummy variable for spline model
 #    x2 is dummy variable for random forest model
 #    bi is random effect of fold
+
+# Since this is Bayesian, we need priors
+# e ~ N(0, sigma)
+# B ~ N(0, 10)      broad-ish prior for coefficient estimates
+# sigma ~ exp(1)    > 0
+# b ~ t(1)          for random intercepts, fatter tails than N
+
+# Attach the original data to measures of performance of the three models
+ames_three_models <- 
+  ames_folds %>%
+  bind_cols(rsq_estimates %>% arrange(id) %>% select(-id))
+
+# Run Bayesian (ANOVA?) on the resampling statistics to estimate posteriors for
+# the model Rsq ~ B0 + B1 * x1 + B2 * x2 + bi
+rsq_anova <-
+  perf_mod(ames_three_models,
+           prior_intercept = student_t(df = 1),
+           chains = 4,
+           iter = 5000,
+           seed = 2)
+
+# Pull out the posteriors
+model_posterior <-
+  rsq_anova %>%
+  tidy(seed = 35) %>% # Only want part of posterior, setting seed for reproducibility
+  as_tibble()
+
+# And we can plot the three distributions
+model_posterior %>%
+  mutate(model = forcats::fct_inorder(model)) %>%
+  ggplot(mapping = aes(x = posterior, fill = model)) +
+  geom_histogram(bins = 50, alpha = 0.5, position = "identity") +
+  labs(x = expression(paste("Posterior for mean ", R^2))) +
+  theme_bw()
+
+# We have posterior distributions for the Bayesian estimates of our measure of 
+# performance, Rsq. We can now ask if the means from each model are 
+# significantly different from one another; or, is the difference in means 
+# significantly different from zero
+rsq_diff <- 
+  contrast_models(rsq_anova,
+                  list_1 = "splines",
+                  list_2 = "no splines",
+                  seed = 36)
+
+# For visual purposes, we can plot this distribution of differences
+rsq_diff %>%
+  as_tibble() %>%
+  ggplot(mapping = aes(x = difference)) +
+  geom_histogram(bins = 100) +
+  geom_vline(xintercept = 0, lty = 2) +
+  labs(x = "Posterior for differences in mean Rsq (splines - no splines)") +
+  theme_bw()
+
+# To get actual values of interest, we can use summary, dropping info from the 
+# output for any columns starting with "pract"
+summary(rsq_diff) %>%
+  select(-starts_with("pract"))
+# Note the probability column reflects posterior probability of the difference 
+# in means being different from zero.
+#     contrast              probability    mean   lower  upper  size
+#     <chr>                       <dbl>   <dbl>   <dbl>  <dbl> <dbl>
+#   1 splines vs no splines       0.988 0.00803 0.00248 0.0135     0
+
+# But the "practical" effect size is 2%. That is, when comparing Rsq, models 
+# need to differ in explaining the percentage of variation by 2% (or 0.02 Rsq) 
+# to be considered meaningfully different. Even though the difference in means 
+# is significantly different from zero, the spline and no spline models may not 
+# be different enough.
+
+# The summary command can calculate the amount of the posterior distributions 
+# that are below this 2% window, the amount within the window, and the amount 
+# above the 2% window
+summary(rsq_diff, size = 0.02) %>%
+  select(contrast, starts_with("pract"))
+# So these two models are practically the same (0.999 posterior probability of 
+# practical equivalence)
+#     contrast              pract_neg pract_equiv pract_pos
+#     <chr>                     <dbl>       <dbl>     <dbl>
+#   1 splines vs no splines         0       0.999    0.0008
+
