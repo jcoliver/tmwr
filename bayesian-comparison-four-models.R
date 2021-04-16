@@ -86,8 +86,7 @@ rf_workflow <-
   add_model(rf_model) # add on that random forest model
 
 # Fit the random forest model with the 10 resamples (that are defined by 
-# ames_folds)
-# Note this is called rf_res on TMWR.org
+# ames_folds). Note this variable is called rf_res on TMWR.org
 rf_fit <- 
   rf_workflow %>%
   fit_resamples(resamples = ames_folds, control = keep_pred)
