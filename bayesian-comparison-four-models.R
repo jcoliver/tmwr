@@ -85,7 +85,8 @@ rf_workflow <-
                 Latitude + Longitude) %>%
   add_model(rf_model) # add on that random forest model
 
-# Fit the random forest model with the 10 resamples
+# Fit the random forest model with the 10 resamples (that are defined by 
+# ames_folds)
 # Note this is called rf_res on TMWR.org
 rf_fit <- 
   rf_workflow %>%
