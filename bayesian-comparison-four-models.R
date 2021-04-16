@@ -5,6 +5,7 @@
 
 rm(list = ls())
 
+################################################################################
 library(tidymodels)
 library(tidyposterior)
 library(rstanarm)
@@ -127,7 +128,7 @@ rsq_anova <- perf_mod(four_models,
                       iter = 5000,
                       seed = 1102)
 
-# Extract posteriors (even though error was thrown)
+# Extract posteriors
 model_posterior <- rsq_anova %>%
   tidy(see = 1003)
 
@@ -137,12 +138,14 @@ model_posterior %>%
   ggplot(mapping = aes(x = posterior)) +
   geom_histogram(bins = 50) +
   facet_wrap(~ model, ncol = 1) +
+  xlab(label = "Posterior rsq") +
   theme_bw()
 
 # Use autoplot again to see the metric (R^2)
 autoplot(rsq_anova)
 
 # We can contrast the differences in means from the posterior distribution
+# Just looking at the simple model vs. the splines + interaction model
 rsq_diff <- contrast_models(x = rsq_anova,
                             list_1 = "splines_lm",
                             list_2 = "simple_lm",
@@ -155,4 +158,10 @@ rsq_diff %>%
   geom_vline(xintercept = 0, lty = 2) +
   theme_bw()
   
-  
+# Compare means between simple vs. splines + interaction models
+summary(rsq_diff) %>%
+  select(-starts_with("pract"))
+
+# We can compare all four models for practical significance (i.e. must be 
+# at least 2% better to be meaningfully different)
+autoplot(rsq_anova, type = "ROPE", size = 0.02)
